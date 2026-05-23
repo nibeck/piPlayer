@@ -15,9 +15,14 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 
 def run(windowed=False):
-    # Initialize Pygame and audio mixer
+    # Initialize Pygame and audio mixer (audio may be unavailable if Raspotify holds the device)
     pygame.init()
-    pygame.mixer.init()
+    audio_available = False
+    try:
+        pygame.mixer.init()
+        audio_available = True
+    except pygame.error as e:
+        print(f"Audio mixer unavailable ({e}), scratch sounds disabled.", file=sys.stderr)
     flags = 0 if windowed else pygame.FULLSCREEN
     screen = pygame.display.set_mode((1080, 1080), flags)
     pygame.display.set_caption("Spotify Record Spinner")
@@ -54,9 +59,11 @@ def run(windowed=False):
     # -------------------------------
     # Load scratch sound effects
     # -------------------------------
-    sfx_dir = BASE_DIR / 'sfx'
-    sfx_paths = [p for p in sfx_dir.iterdir() if p.is_file() and p.suffix.lower() == '.wav']
-    scratch_sounds = [pygame.mixer.Sound(str(path)) for path in sfx_paths]
+    scratch_sounds = []
+    if audio_available:
+        sfx_dir = BASE_DIR / 'sfx'
+        sfx_paths = [p for p in sfx_dir.iterdir() if p.is_file() and p.suffix.lower() == '.wav']
+        scratch_sounds = [pygame.mixer.Sound(str(path)) for path in sfx_paths]
 
     # -------------------------------
     # State variables
@@ -199,7 +206,7 @@ def run(windowed=False):
                     dy = event.pos[1] - swipe_start_pos[1]
                     dist = math.hypot(dx, dy)
                     elapsed = time.time() - swipe_start_time
-                    if dist > SWIPE_DIST and elapsed < SWIPE_TIME:
+                    if dist > SWIPE_DIST and elapsed < SWIPE_TIME and scratch_sounds:
                         random.choice(scratch_sounds).play()
 
                 dragging = False
