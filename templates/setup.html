@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>piPlayer Setup</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 540px; margin: 0 auto; padding: 20px; background: #121212; color: #e0e0e0; line-height: 1.5; }
+        h1 { color: #1db954; margin-bottom: 20px; font-size: 1.6em; }
+        h2 { color: #b3b3b3; font-size: 1.1em; margin: 20px 0 10px; }
+        label { display: block; margin-top: 14px; font-size: 0.9em; color: #b3b3b3; }
+        input[type=text], input[type=password] { width: 100%; padding: 12px; margin-top: 4px; border-radius: 6px; border: 1px solid #333; background: #1a1a1a; color: #fff; font-size: 1em; }
+        input:focus { outline: none; border-color: #1db954; }
+        button { background: #1db954; color: #fff; padding: 14px; border: none; border-radius: 25px; cursor: pointer; width: 100%; font-size: 1em; font-weight: 600; margin-top: 20px; }
+        button:hover { background: #1ed760; }
+        .msg { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.95em; }
+        .msg-ok { background: #0d3320; border: 1px solid #1db954; }
+        .msg-err { background: #3d1111; border: 1px solid #e74c3c; }
+        .msg-info { background: #1a2744; border: 1px solid #3498db; }
+        small { display: block; margin-top: 4px; color: #777; font-size: 0.82em; }
+        a { color: #1db954; }
+        .auth-link { display: block; text-align: center; background: #1db954; color: #fff; padding: 14px; border-radius: 25px; text-decoration: none; font-weight: 600; margin: 20px 0; }
+        .auth-link:hover { background: #1ed760; }
+        .url-box { background: #1a1a1a; padding: 12px; border-radius: 6px; word-break: break-all; margin: 10px 0; font-size: 0.85em; color: #b3b3b3; }
+        hr { border: none; border-top: 1px solid #333; margin: 24px 0; }
+    </style>
+</head>
+<body>
+    <h1>piPlayer Setup</h1>
+
+    {% for msg, cat in get_flashed_messages(with_categories=true) %}
+    <div class="msg {{ 'msg-ok' if cat == 'success' else 'msg-err' if cat == 'error' else 'msg-info' }}">{{ msg }}</div>
+    {% endfor %}
+
+    <div class="msg {{ 'msg-ok' if authenticated else 'msg-info' }}">
+        {% if authenticated %}
+            Connected to Spotify. <a href="{{ url_for('status') }}">View status</a>
+        {% elif has_credentials %}
+            Credentials saved &mdash; authorization needed.
+        {% else %}
+            Not configured yet. Enter your Spotify app credentials below.
+        {% endif %}
+    </div>
+
+    <form method="POST" action="{{ url_for('setup') }}">
+        <h2>Spotify Credentials</h2>
+
+        <label for="client_id">Client ID</label>
+        <input type="text" id="client_id" name="client_id" value="{{ client_id or '' }}" required>
+
+        <label for="client_secret">Client Secret</label>
+        <input type="password" id="client_secret" name="client_secret" value="{{ client_secret or '' }}"
+               placeholder="{% if has_secret %}(saved &mdash; leave blank to keep){% endif %}"
+               {{ '' if not has_secret else '' }}>
+
+        <label for="username">Spotify Username</label>
+        <input type="text" id="username" name="username" value="{{ username or '' }}" required>
+
+        <label for="redirect_uri">Redirect URI</label>
+        <input type="text" id="redirect_uri" name="redirect_uri" value="{{ redirect_uri or '' }}">
+        <small>Register this exact URI in your <a href="https://developer.spotify.com/dashboard" target="_blank">Spotify Developer Dashboard</a> under Redirect URIs.</small>
+
+        <button type="submit">Save &amp; Authorize</button>
+    </form>
+
+    {% if authorize_url %}
+    <hr>
+    <h2>Authorize with Spotify</h2>
+    <p>Click the link below to grant piPlayer access to your Spotify account:</p>
+    <a class="auth-link" href="{{ authorize_url }}">Authorize on Spotify</a>
+    <p><small>Or copy this URL into your browser:</small></p>
+    <div class="url-box">{{ authorize_url }}</div>
+
+    <hr>
+    <h2>Manual Callback</h2>
+    <p>If the redirect hangs after authorizing, copy the full URL from your browser's address bar and paste it here:</p>
+    <form method="POST" action="{{ url_for('manual_callback') }}">
+        <input type="text" name="callback_url" placeholder="https://192.168....:5000/callback?code=..." required>
+        <button type="submit">Submit Code</button>
+    </form>
+    {% endif %}
+</body>
+</html>
