@@ -46,31 +46,30 @@ echo "[4/5] Installing Python dependencies..."
 echo "  Python dependencies installed."
 echo ""
 
-# 5. Set up systemd service
-echo "[5/5] Setting up systemd service..."
-sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null <<EOF
-[Unit]
-Description=piPlayer Spotify Record Player
-After=network-online.target sound.target
-Wants=network-online.target
+# 5. Disable old systemd service if present
+if systemctl is-enabled ${SERVICE_NAME} &> /dev/null; then
+    echo "[5/5] Removing old systemd service..."
+    sudo systemctl stop ${SERVICE_NAME} 2>/dev/null || true
+    sudo systemctl disable ${SERVICE_NAME} 2>/dev/null || true
+    sudo rm -f /etc/systemd/system/${SERVICE_NAME}.service
+    sudo systemctl daemon-reload
+fi
 
-[Service]
-Type=simple
-User=$(whoami)
-WorkingDirectory=$SCRIPT_DIR
-ExecStart=$VENV_DIR/bin/python $SCRIPT_DIR/main.py
-Restart=on-failure
-RestartSec=5
-Environment=SDL_VIDEODRIVER=kms
-Environment=SDL_AUDIODRIVER=alsa
-
-[Install]
-WantedBy=multi-user.target
+# 5. Set up desktop autostart
+echo "[5/5] Setting up autostart..."
+AUTOSTART_DIR="$HOME/.config/autostart"
+mkdir -p "$AUTOSTART_DIR"
+cat > "$AUTOSTART_DIR/${SERVICE_NAME}.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=piPlayer
+Comment=Spotify Record Player
+Exec=$VENV_DIR/bin/python $SCRIPT_DIR/main.py
+Path=$SCRIPT_DIR
+Terminal=false
+X-GNOME-Autostart-enabled=true
 EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable ${SERVICE_NAME}
-echo "  Systemd service '${SERVICE_NAME}' created and enabled."
+echo "  Desktop autostart entry created."
 echo ""
 
 # Done
@@ -85,14 +84,8 @@ echo "     $VENV_DIR/bin/python $SCRIPT_DIR/setup.py"
 echo "     Then open https://${LOCAL_IP}:5000 in your browser."
 echo ""
 echo "  2. After configuring, stop the setup server (Ctrl+C) and start the player:"
-echo "     sudo systemctl start ${SERVICE_NAME}"
+echo "     $VENV_DIR/bin/python $SCRIPT_DIR/main.py"
 echo ""
 echo "  3. The player will auto-start on boot from now on."
-echo ""
-echo "  Useful commands:"
-echo "     sudo systemctl start ${SERVICE_NAME}    # Start the player"
-echo "     sudo systemctl stop ${SERVICE_NAME}     # Stop the player"
-echo "     sudo systemctl restart ${SERVICE_NAME}  # Restart the player"
-echo "     sudo systemctl status ${SERVICE_NAME}   # Check status"
-echo "     journalctl -u ${SERVICE_NAME} -f        # View logs"
+echo "     To start it manually now: $VENV_DIR/bin/python $SCRIPT_DIR/main.py"
 echo ""
