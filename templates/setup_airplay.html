@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>piPlayer - Apple Music Setup</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 540px; margin: 0 auto; padding: 20px; background: #121212; color: #e0e0e0; line-height: 1.5; }
+        h1 { color: #fa586a; margin-bottom: 20px; font-size: 1.6em; }
+        h2 { color: #b3b3b3; font-size: 1.1em; margin: 20px 0 10px; }
+        .msg { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.95em; }
+        .msg-ok { background: #0d3320; border: 1px solid #1db954; }
+        .msg-err { background: #3d1111; border: 1px solid #e74c3c; }
+        .msg-info { background: #1a2744; border: 1px solid #3498db; }
+        a { color: #fa586a; }
+        .status-row { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #333; }
+        .status-label { flex: 1; color: #b3b3b3; }
+        .status-value { font-weight: 600; }
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .dot-green { background: #1db954; }
+        .dot-red { background: #e74c3c; }
+        .instructions { background: #1a1a1a; border-radius: 8px; padding: 16px; margin: 20px 0; }
+        .instructions ol { padding-left: 20px; }
+        .instructions li { margin: 8px 0; }
+        .back { display: inline-block; margin-bottom: 16px; color: #b3b3b3; text-decoration: none; font-size: 0.9em; }
+        .back:hover { color: #fa586a; }
+    </style>
+</head>
+<body>
+    <a class="back" href="{{ url_for('setup') }}">&larr; Back to provider selection</a>
+    <h1>Apple Music Setup</h1>
+
+    {% for msg, cat in get_flashed_messages(with_categories=true) %}
+    <div class="msg {{ 'msg-ok' if cat == 'success' else 'msg-err' if cat == 'error' else 'msg-info' }}">{{ msg }}</div>
+    {% endfor %}
+
+    <h2>Service Status</h2>
+
+    <div class="status-row">
+        <span class="status-label">shairport-sync installed</span>
+        <span class="status-value">
+            <span class="status-dot {{ 'dot-green' if status.installed else 'dot-red' }}"></span>
+            {{ 'Yes' if status.installed else 'No' }}
+        </span>
+    </div>
+
+    <div class="status-row">
+        <span class="status-label">Service running</span>
+        <span class="status-value">
+            <span class="status-dot {{ 'dot-green' if status.running else 'dot-red' }}"></span>
+            {{ 'Yes' if status.running else 'No' }}
+        </span>
+    </div>
+
+    <div class="status-row">
+        <span class="status-label">Metadata pipe</span>
+        <span class="status-value">
+            <span class="status-dot {{ 'dot-green' if status.pipe_exists else 'dot-red' }}"></span>
+            {{ 'Ready' if status.pipe_exists else 'Not found' }}
+        </span>
+    </div>
+
+    <div class="status-row">
+        <span class="status-label">AirPlay device name</span>
+        <span class="status-value">{{ status.device_name }}</span>
+    </div>
+
+    {% if status.installed and status.running %}
+    <div class="msg msg-ok" style="margin-top: 20px;">
+        AirPlay is ready. No credentials needed.
+    </div>
+
+    <div class="instructions">
+        <h2>How to connect</h2>
+        <ol>
+            <li>Open the <strong>Music</strong> app on your iPhone</li>
+            <li>Start playing a song</li>
+            <li>Tap the <strong>AirPlay</strong> icon (the triangle with circles)</li>
+            <li>Select <strong>{{ status.device_name }}</strong></li>
+        </ol>
+    </div>
+    {% elif not status.installed %}
+    <div class="msg msg-err" style="margin-top: 20px;">
+        shairport-sync is not installed. Run <code>./install.sh</code> on the Pi to install it.
+    </div>
+    {% elif not status.running %}
+    <div class="msg msg-err" style="margin-top: 20px;">
+        shairport-sync is installed but not running. Try: <code>sudo systemctl start shairport-sync</code>
+    </div>
+    {% endif %}
+</body>
+</html>

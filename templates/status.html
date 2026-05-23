@@ -24,7 +24,7 @@
     {% endfor %}
 
     <div class="msg msg-ok">
-        <p><strong>Spotify is connected.</strong></p>
+        <p><strong>Active provider:</strong> {{ provider_name }}</p>
         {% if display_name %}
         <p>Logged in as: {{ display_name }}</p>
         {% endif %}
@@ -38,8 +38,10 @@
     {% endif %}
 
     <div class="links">
-        <a href="{{ url_for('setup') }}">Change Settings</a>
+        <a href="{{ url_for('setup') }}">Change Provider</a>
+        {% if provider_id == 'spotify' %}
         <a href="{{ url_for('authorize') }}">Re-authorize</a>
+        {% endif %}
     </div>
 </body>
 </html>

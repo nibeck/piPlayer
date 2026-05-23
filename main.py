@@ -7,7 +7,8 @@ import time
 import math
 import threading
 from io import BytesIO
-from spot import get_current_playing_info, start_music, stop_music, skip_to_next, skip_to_previous, SpotifyManager
+from providers import get_current_playing_info, start_music, stop_music, skip_to_next, skip_to_previous
+from providers.manager import ProviderManager
 from web_config import start_flask_background, get_local_ip
 import argparse
 from pathlib import Path
@@ -15,7 +16,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 
 def run(windowed=False):
-    # Initialize Pygame and audio mixer (audio may be unavailable if Raspotify holds the device)
+    # Initialize Pygame and audio mixer (audio may be unavailable if audio daemon holds the device)
     pygame.init()
     audio_available = False
     try:
@@ -25,18 +26,25 @@ def run(windowed=False):
         print(f"Audio mixer unavailable ({e}), scratch sounds disabled.", file=sys.stderr)
     flags = 0 if windowed else pygame.FULLSCREEN
     screen = pygame.display.set_mode((1080, 1080), flags)
-    pygame.display.set_caption("Spotify Record Spinner")
+    pygame.display.set_caption("piPlayer")
     # Hide mouse cursor (useful on touchscreens)
     pygame.mouse.set_visible(False)
 
     # Start web config server in the background
     start_flask_background()
-    mgr = SpotifyManager.get_instance()
-    if not mgr.is_authenticated():
-        mgr.try_cached_auth()
-    if not mgr.is_authenticated():
+
+    # Check active provider
+    mgr = ProviderManager.get_instance()
+    provider = mgr.get_active()
+    if provider:
+        if provider.get_id() == "spotify" and not provider.is_authenticated():
+            ip = get_local_ip()
+            print(f"Spotify not authenticated. Visit https://{ip}:5000 to set up.", file=sys.stderr)
+        elif provider.get_id() == "airplay":
+            print("AirPlay mode active. Select this device as an AirPlay speaker.", file=sys.stderr)
+    else:
         ip = get_local_ip()
-        print(f"Spotify not authenticated. Visit https://{ip}:5000 to set up.", file=sys.stderr)
+        print(f"No music provider configured. Visit https://{ip}:5000 to set up.", file=sys.stderr)
 
     # -------------------------------
     # Load & scale images (resources relative to script location)
@@ -47,7 +55,7 @@ def run(windowed=False):
     record_image = pygame.image.load(str(random_record_path))
     record_image = pygame.transform.scale(record_image, (int(1080 * 1.25), int(1080 * 1.25)))
 
-    icons_dir = BASE_DIR / 'spotify'
+    icons_dir = BASE_DIR / 'assets'
     play_btn  = pygame.image.load(str(icons_dir / 'play.png'))
     pause_btn = pygame.image.load(str(icons_dir / 'pause.png'))
     skip_btn  = pygame.image.load(str(icons_dir / 'skip.png'))
@@ -88,9 +96,18 @@ def run(windowed=False):
         if new_details:
             details = new_details
             try:
-                r = requests.get(details["album_cover"])
-                img = pygame.image.load(BytesIO(r.content))
-                album_img = pygame.transform.scale(img, (137, 137))
+                art = details.get("album_art")
+                if art is None:
+                    pass  # keep existing album_img
+                elif isinstance(art, bytes):
+                    # Binary data from shairport-sync
+                    img = pygame.image.load(BytesIO(art))
+                    album_img = pygame.transform.scale(img, (137, 137))
+                elif isinstance(art, str):
+                    # URL from Spotify
+                    r = requests.get(art)
+                    img = pygame.image.load(BytesIO(r.content))
+                    album_img = pygame.transform.scale(img, (137, 137))
             except Exception as e:
                 print(f"Error loading album cover: {e}", file=sys.stderr)
 
@@ -112,7 +129,7 @@ def run(windowed=False):
     swipe_start_pos = None
     swipe_start_time = None
     SWIPE_DIST  = 100    # Minimum pixels moved
-    SWIPE_TIME  = 0.5    
+    SWIPE_TIME  = 0.5
 
     while True:
 
@@ -278,7 +295,7 @@ def run(windowed=False):
         pygame.display.flip()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Spotify Record Player")
+    parser = argparse.ArgumentParser(description="piPlayer")
     parser.add_argument('--windowed', action='store_true', help='Run in windowed mode (no fullscreen)')
     args = parser.parse_args()
     run(windowed=args.windowed)
