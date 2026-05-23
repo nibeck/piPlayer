@@ -64,7 +64,7 @@ cat > "$AUTOSTART_DIR/${SERVICE_NAME}.desktop" <<EOF
 Type=Application
 Name=piPlayer
 Comment=Spotify Record Player
-Exec=$VENV_DIR/bin/python $SCRIPT_DIR/main.py
+Exec=bash -c '$VENV_DIR/bin/python $SCRIPT_DIR/main.py >> $SCRIPT_DIR/piPlayer.log 2>&1'
 Path=$SCRIPT_DIR
 Terminal=false
 X-GNOME-Autostart-enabled=true
