@@ -189,8 +189,17 @@ class AirPlayProvider(MusicProvider):
         if not type_match or not code_match:
             return
 
-        item_type = type_match.group(1).strip()
-        item_code = code_match.group(1).strip()
+        # Type and code are hex-encoded ASCII (e.g., "636f7265" → "core")
+        item_type_hex = type_match.group(1).strip()
+        item_code_hex = code_match.group(1).strip()
+        try:
+            item_type = bytes.fromhex(item_type_hex).decode("ascii")
+        except (ValueError, UnicodeDecodeError):
+            item_type = item_type_hex
+        try:
+            item_code = bytes.fromhex(item_code_hex).decode("ascii")
+        except (ValueError, UnicodeDecodeError):
+            item_code = item_code_hex
 
         data_bytes = None
         if data_match:
@@ -217,6 +226,8 @@ class AirPlayProvider(MusicProvider):
                     self._playing = True
                 elif item_code == "pfls":
                     self._playing = False
+                elif item_code == "PICT" and data_bytes:
+                    self._album_art_bytes = data_bytes
             elif item_type == "core":
                 if item_code == "minm" and data_bytes:
                     self._current_track["title"] = data_bytes.decode("utf-8", errors="replace")
@@ -224,8 +235,6 @@ class AirPlayProvider(MusicProvider):
                     self._current_track["artist"] = data_bytes.decode("utf-8", errors="replace")
                 elif item_code == "asal" and data_bytes:
                     self._current_track["album"] = data_bytes.decode("utf-8", errors="replace")
-                elif item_code == "PICT" and data_bytes:
-                    self._album_art_bytes = data_bytes
 
     def get_service_status(self):
         """Return shairport-sync service status for the web config UI."""

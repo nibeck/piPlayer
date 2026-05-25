@@ -90,7 +90,7 @@ def setup_spotify():
             client_secret = sm.client_secret
 
         if not redirect_uri:
-            redirect_uri = f"https://{get_local_ip()}:5000/callback"
+            redirect_uri = f"https://{get_local_ip()}:5001/callback"
 
         if not all([client_id, client_secret, username]):
             flash("Client ID, Client Secret, and Username are all required.", "error")
@@ -101,7 +101,7 @@ def setup_spotify():
         return redirect(url_for("authorize"))
 
     local_ip = get_local_ip()
-    default_redirect = f"https://{local_ip}:5000/callback"
+    default_redirect = f"https://{local_ip}:5001/callback"
 
     return render_template(
         "setup_spotify.html",
@@ -265,14 +265,14 @@ def _ensure_ssl_cert():
     return str(cert_file), str(key_file)
 
 
-def run_flask(host="0.0.0.0", port=5000):
+def run_flask(host="0.0.0.0", port=5001):
     cert, key = _ensure_ssl_cert()
     ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ssl_ctx.load_cert_chain(cert, key)
     app.run(host=host, port=port, debug=False, use_reloader=False, ssl_context=ssl_ctx)
 
 
-def start_flask_background(host="0.0.0.0", port=5000):
+def start_flask_background(host="0.0.0.0", port=5001):
     t = threading.Thread(target=run_flask, args=(host, port), daemon=True)
     t.start()
     return t

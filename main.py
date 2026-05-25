@@ -16,14 +16,22 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 
 def run(windowed=False):
-    # Initialize Pygame and audio mixer (audio may be unavailable if audio daemon holds the device)
+    # Initialize Pygame
     pygame.init()
+
+    # Only initialize audio mixer if NOT in AirPlay mode
+    # (AirPlay uses shairport-sync for audio, and pygame.mixer would block the audio device)
+    mgr = ProviderManager.get_instance()
+    active_provider = mgr.get_active()
     audio_available = False
-    try:
-        pygame.mixer.init()
-        audio_available = True
-    except pygame.error as e:
-        print(f"Audio mixer unavailable ({e}), scratch sounds disabled.", file=sys.stderr)
+    if active_provider and active_provider.get_id() == "airplay":
+        print("AirPlay mode: skipping audio mixer init (shairport-sync handles audio).", file=sys.stderr)
+    else:
+        try:
+            pygame.mixer.init()
+            audio_available = True
+        except pygame.error as e:
+            print(f"Audio mixer unavailable ({e}), scratch sounds disabled.", file=sys.stderr)
     flags = 0 if windowed else pygame.FULLSCREEN
     screen = pygame.display.set_mode((1080, 1080), flags)
     pygame.display.set_caption("piPlayer")
@@ -34,17 +42,16 @@ def run(windowed=False):
     start_flask_background()
 
     # Check active provider
-    mgr = ProviderManager.get_instance()
     provider = mgr.get_active()
     if provider:
         if provider.get_id() == "spotify" and not provider.is_authenticated():
             ip = get_local_ip()
-            print(f"Spotify not authenticated. Visit https://{ip}:5000 to set up.", file=sys.stderr)
+            print(f"Spotify not authenticated. Visit https://{ip}:5001 to set up.", file=sys.stderr)
         elif provider.get_id() == "airplay":
             print("AirPlay mode active. Select this device as an AirPlay speaker.", file=sys.stderr)
     else:
         ip = get_local_ip()
-        print(f"No music provider configured. Visit https://{ip}:5000 to set up.", file=sys.stderr)
+        print(f"No music provider configured. Visit https://{ip}:5001 to set up.", file=sys.stderr)
 
     # -------------------------------
     # Load & scale images (resources relative to script location)

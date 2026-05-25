@@ -8,7 +8,7 @@ from web_config import run_flask, get_local_ip
 
 def main():
     parser = argparse.ArgumentParser(description="piPlayer Setup Server")
-    parser.add_argument("--port", type=int, default=5000, help="Port to run on (default: 5000)")
+    parser.add_argument("--port", type=int, default=5001, help="Port to run on (default: 5001)")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
     args = parser.parse_args()
 
