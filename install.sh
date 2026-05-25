@@ -110,6 +110,24 @@ EOF
 echo "  Desktop autostart entry created."
 echo ""
 
+# Configure Raspotify to run as current user (required for PipeWire audio access)
+RASPOTIFY_OVERRIDE_DIR="/etc/systemd/system/raspotify.service.d"
+if [ ! -f "$RASPOTIFY_OVERRIDE_DIR/override.conf" ]; then
+    CURRENT_USER=$(whoami)
+    CURRENT_UID=$(id -u)
+    sudo mkdir -p "$RASPOTIFY_OVERRIDE_DIR"
+    sudo bash -c "cat > $RASPOTIFY_OVERRIDE_DIR/override.conf" <<OVERRIDE
+[Service]
+User=$CURRENT_USER
+ProtectHome=no
+Environment=XDG_RUNTIME_DIR=/run/user/$CURRENT_UID
+OVERRIDE
+    sudo systemctl daemon-reload
+    sudo systemctl restart raspotify
+    echo "  Raspotify configured to run as $CURRENT_USER (PipeWire access)."
+fi
+echo ""
+
 # Configure sudoers for daemon switching (allows piPlayer to start/stop audio services)
 SUDOERS_FILE="/etc/sudoers.d/piplayer"
 if [ ! -f "$SUDOERS_FILE" ]; then
