@@ -80,23 +80,35 @@ class ProviderManager:
         """Stop/start audio daemons based on the selected provider."""
         try:
             if new_provider_id == "spotify":
-                subprocess.run(
+                r1 = subprocess.run(
                     ["sudo", "systemctl", "stop", "shairport-sync"],
-                    capture_output=True, timeout=10,
+                    capture_output=True, text=True, timeout=10,
                 )
-                subprocess.run(
+                if r1.returncode != 0:
+                    print(f"Warning: stopping shairport-sync: {r1.stderr.strip()}", file=sys.stderr)
+                r2 = subprocess.run(
                     ["sudo", "systemctl", "start", "raspotify"],
-                    capture_output=True, timeout=10,
+                    capture_output=True, text=True, timeout=10,
                 )
+                if r2.returncode != 0:
+                    print(f"Error starting raspotify: {r2.stderr.strip()}", file=sys.stderr)
+                else:
+                    print("Switched daemons: shairport-sync stopped, raspotify started.", file=sys.stderr)
             elif new_provider_id == "airplay":
-                subprocess.run(
+                r1 = subprocess.run(
                     ["sudo", "systemctl", "stop", "raspotify"],
-                    capture_output=True, timeout=10,
+                    capture_output=True, text=True, timeout=10,
                 )
-                subprocess.run(
+                if r1.returncode != 0:
+                    print(f"Warning: stopping raspotify: {r1.stderr.strip()}", file=sys.stderr)
+                r2 = subprocess.run(
                     ["sudo", "systemctl", "start", "shairport-sync"],
-                    capture_output=True, timeout=10,
+                    capture_output=True, text=True, timeout=10,
                 )
+                if r2.returncode != 0:
+                    print(f"Error starting shairport-sync: {r2.stderr.strip()}", file=sys.stderr)
+                else:
+                    print("Switched daemons: raspotify stopped, shairport-sync started.", file=sys.stderr)
         except Exception as e:
             print(f"Error switching daemons: {e}", file=sys.stderr)
 

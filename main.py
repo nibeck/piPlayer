@@ -19,19 +19,12 @@ def run(windowed=False):
     # Initialize Pygame
     pygame.init()
 
-    # Only initialize audio mixer if NOT in AirPlay mode
-    # (AirPlay uses shairport-sync for audio, and pygame.mixer would block the audio device)
+    # Skip audio mixer init — both Raspotify and shairport-sync handle their own audio
+    # output, and pygame.mixer grabs the ALSA device exclusively, blocking them.
     mgr = ProviderManager.get_instance()
     active_provider = mgr.get_active()
     audio_available = False
-    if active_provider and active_provider.get_id() == "airplay":
-        print("AirPlay mode: skipping audio mixer init (shairport-sync handles audio).", file=sys.stderr)
-    else:
-        try:
-            pygame.mixer.init()
-            audio_available = True
-        except pygame.error as e:
-            print(f"Audio mixer unavailable ({e}), scratch sounds disabled.", file=sys.stderr)
+    print("Skipping audio mixer init (music provider handles audio).", file=sys.stderr)
     flags = 0 if windowed else pygame.FULLSCREEN
     screen = pygame.display.set_mode((1080, 1080), flags)
     pygame.display.set_caption("piPlayer")
@@ -57,7 +50,8 @@ def run(windowed=False):
     # Load & scale images (resources relative to script location)
     # -------------------------------
     record_dir = BASE_DIR / 'records'
-    record_files = [p for p in record_dir.iterdir() if p.is_file()]
+    image_exts = {'.png', '.jpg', '.jpeg', '.bmp', '.gif'}
+    record_files = [p for p in record_dir.iterdir() if p.is_file() and p.suffix.lower() in image_exts]
     random_record_path = random.choice(record_files)
     record_image = pygame.image.load(str(random_record_path))
     record_image = pygame.transform.scale(record_image, (int(1080 * 1.25), int(1080 * 1.25)))
@@ -67,7 +61,26 @@ def run(windowed=False):
     pause_btn = pygame.image.load(str(icons_dir / 'pause.png'))
     skip_btn  = pygame.image.load(str(icons_dir / 'skip.png'))
     prev_btn  = pygame.image.load(str(icons_dir / 'previous.png'))
-    banner    = pygame.image.load(str(icons_dir / 'banner.png'))
+
+    # Load provider logo for center of spinning record
+    current_provider_id = active_provider.get_id() if active_provider else None
+
+    def load_provider_logo(provider_id):
+        """Load the logo for the given provider, or return None."""
+        if not provider_id:
+            return None
+        if provider_id == "airplay":
+            logo_file = icons_dir / "logo_apple_music.png"
+        elif provider_id == "spotify":
+            logo_file = icons_dir / "logo_spotify.png"
+        else:
+            logo_file = icons_dir / f"logo_{provider_id.replace(' ', '_')}.png"
+        if logo_file.exists():
+            logo = pygame.image.load(str(logo_file)).convert_alpha()
+            return pygame.transform.scale(logo, (150, 150))
+        return None
+
+    provider_logo = load_provider_logo(current_provider_id)
 
     font = pygame.font.Font(None, 40)
 
@@ -121,11 +134,21 @@ def run(windowed=False):
     # Initial fetch of details
     update_details()
 
-    # Background thread to periodically update details
+    # Background thread to periodically update details and detect provider changes
     def details_thread():
+        nonlocal provider_logo, current_provider_id, details, album_img
         while True:
             time.sleep(5)
             try:
+                # Check if provider changed via web UI
+                new_id = mgr.get_active_id()
+                if new_id != current_provider_id:
+                    print(f"Provider changed: {current_provider_id} → {new_id}", file=sys.stderr)
+                    current_provider_id = new_id
+                    provider_logo = load_provider_logo(new_id)
+                    details = None
+                    album_img = None
+
                 update_details()
             except Exception as e:
                 print(f"Error in details_thread: {e}", file=sys.stderr)
@@ -155,27 +178,24 @@ def run(windowed=False):
                 swipe_start_time = time.time()
                 mx, my = event.pos
 
-                # Compute control positions
-                banner_x = (1080 - banner.get_width()) // 2
-                banner_y = 800
-                gap = 51
-                album_w, album_h = (137, 137) if album_img else (0, 0)
+                # Compute control positions (must match drawing code)
+                ctrl_box_h = 90
+                ctrl_box_y = 1080 - 100 - ctrl_box_h  # edge_margin=100
                 prev_w, prev_h   = prev_btn.get_width(), prev_btn.get_height()
                 pause_w, pause_h = pause_btn.get_width(), pause_btn.get_height()
                 skip_w, skip_h   = skip_btn.get_width(), skip_btn.get_height()
 
-                group_width   = album_w + prev_w + pause_w + skip_w + (3 * gap)
-                group_start_x = (1080 - group_width) // 2
-                group_center_y = banner_y + (banner.get_height() // 2) + 30
+                btn_gap = 60
+                btns_width = prev_w + pause_w + skip_w + (2 * btn_gap)
+                btns_start_x = (1080 - btns_width) // 2
+                ctrl_center_y = ctrl_box_y + ctrl_box_h // 2
 
-                album_x = group_start_x
-                album_y = (group_center_y - (album_h // 2)) - 30
-                prev_x  = album_x + album_w + gap
-                prev_y  = group_center_y - (prev_h // 2)
-                pause_x = prev_x + prev_w + gap
-                pause_y = group_center_y - (pause_h // 2)
-                skip_x  = pause_x + pause_w + gap
-                skip_y  = group_center_y - (skip_h // 2)
+                prev_x  = btns_start_x
+                prev_y  = ctrl_center_y - prev_h // 2
+                pause_x = prev_x + prev_w + btn_gap
+                pause_y = ctrl_center_y - pause_h // 2
+                skip_x  = pause_x + pause_w + btn_gap
+                skip_y  = ctrl_center_y - skip_h // 2
 
                 # Previous track
                 if prev_x <= mx <= prev_x + prev_w and prev_y <= my <= prev_y + prev_h:
@@ -252,52 +272,91 @@ def run(windowed=False):
         # Spinning record
         rotated = pygame.transform.rotate(record_image, angle)
         screen.blit(rotated, rotated.get_rect(center=center))
+
+        # Provider logo spinning at center of record
+        if provider_logo:
+            rotated_logo = pygame.transform.rotate(provider_logo, angle)
+            screen.blit(rotated_logo, rotated_logo.get_rect(center=center))
+
         if is_playing:
             angle = (angle + angle_speed) % 360
 
-        # Banner
-        banner_x = (1080 - banner.get_width()) // 2
-        banner_y = 800
-        screen.blit(banner, (banner_x, banner_y))
+        # --- Layout: symmetrical top/bottom boxes ---
+        edge_margin = 100  # distance from screen edge
+        ctrl_box_h = 90
+        meta_box_h = 120
+        ctrl_box_y = 1080 - edge_margin - ctrl_box_h  # bottom box
+        meta_box_y = edge_margin                        # top box (mirrored)
 
-        # Control group layout
-        gap = 51
-        album_w, album_h = (137, 137) if album_img else (0, 0)
+        # --- Metadata box (album art + song info) ---
+        meta_box_x = 60
+        meta_box_w = 1080 - 120
+        meta_surface = pygame.Surface((meta_box_w, meta_box_h), pygame.SRCALPHA)
+        meta_surface.fill((0, 0, 0, 160))
+        screen.blit(meta_surface, (meta_box_x, meta_box_y))
+
+        album_w, album_h = (100, 100) if album_img else (0, 0)
+        art_text_gap = 15
+
+        # Pre-render text to measure widths for centering
+        song_surf = None
+        artist_surf = None
+        text_block_w = 0
+        if details:
+            song_surf   = font.render(details["title"],  True, (255, 255, 255))
+            artist_surf = font.render(details["artist"], True, (200, 200, 200))
+            text_block_w = max(song_surf.get_width(), artist_surf.get_width())
+
+        # Calculate total content width and center it
+        content_w = album_w + (art_text_gap if album_img and text_block_w else 0) + text_block_w
+        content_x = meta_box_x + (meta_box_w - content_w) // 2
+
+        album_x = content_x
+        album_y = meta_box_y + (meta_box_h - album_h) // 2
+
+        if album_img:
+            scaled_album = pygame.transform.scale(album_img, (album_w, album_h))
+            screen.blit(scaled_album, (album_x, album_y))
+
+        if details and song_surf and artist_surf:
+            text_x = album_x + album_w + art_text_gap if album_img else content_x
+            text_max_w = meta_box_x + meta_box_w - text_x - 15
+            # Clip text if too wide
+            if song_surf.get_width() > text_max_w:
+                song_surf = song_surf.subsurface((0, 0, text_max_w, song_surf.get_height()))
+            if artist_surf.get_width() > text_max_w:
+                artist_surf = artist_surf.subsurface((0, 0, text_max_w, artist_surf.get_height()))
+            text_total_h = song_surf.get_height() + 4 + artist_surf.get_height()
+            text_y = meta_box_y + (meta_box_h - text_total_h) // 2
+            screen.blit(song_surf,   (text_x, text_y))
+            screen.blit(artist_surf, (text_x, text_y + song_surf.get_height() + 4))
+
+        # --- Controls box (playback buttons) ---
+        ctrl_box_x = 60
+        ctrl_box_w = 1080 - 120
+        ctrl_surface = pygame.Surface((ctrl_box_w, ctrl_box_h), pygame.SRCALPHA)
+        ctrl_surface.fill((0, 0, 0, 160))
+        screen.blit(ctrl_surface, (ctrl_box_x, ctrl_box_y))
+
         prev_w, prev_h   = prev_btn.get_width(), prev_btn.get_height()
         pause_w, pause_h = pause_btn.get_width(), pause_btn.get_height()
         skip_w, skip_h   = skip_btn.get_width(), skip_btn.get_height()
 
-        group_width   = album_w + prev_w + pause_w + skip_w + (3 * gap)
-        group_start_x = (1080 - group_width) // 2
-        group_center_y = banner_y + (banner.get_height() // 2) + 30
+        btn_gap = 60
+        btns_width = prev_w + pause_w + skip_w + (2 * btn_gap)
+        btns_start_x = (1080 - btns_width) // 2
+        ctrl_center_y = ctrl_box_y + ctrl_box_h // 2
 
-        album_x = group_start_x
-        album_y = (group_center_y - (album_h // 2)) - 30
-        prev_x  = album_x + album_w + gap
-        prev_y  = group_center_y - (prev_h // 2)
-        pause_x = prev_x + prev_w + gap
-        pause_y = group_center_y - (pause_h // 2)
-        skip_x  = pause_x + pause_w + gap
-        skip_y  = group_center_y - (skip_h // 2)
+        prev_x  = btns_start_x
+        prev_y  = ctrl_center_y - prev_h // 2
+        pause_x = prev_x + prev_w + btn_gap
+        pause_y = ctrl_center_y - pause_h // 2
+        skip_x  = pause_x + pause_w + btn_gap
+        skip_y  = ctrl_center_y - skip_h // 2
 
-        if album_img:
-            screen.blit(album_img, (album_x, album_y))
         screen.blit(prev_btn,  (prev_x,  prev_y))
         screen.blit(pause_btn if is_playing else play_btn, (pause_x, pause_y))
         screen.blit(skip_btn,  (skip_x,  skip_y))
-
-        # Song text
-        if details:
-            song_surf   = font.render(details["title"],  True, (255, 255, 255))
-            artist_surf = font.render(details["artist"], True, (255, 255, 255))
-            pcx = pause_x + pause_w // 2
-            tb  = pause_y - 10
-            ay  = tb - artist_surf.get_height()
-            sy  = ay - 5 - song_surf.get_height()
-            sx  = pcx - (song_surf.get_width()   // 2)
-            ax  = pcx - (artist_surf.get_width() // 2)
-            screen.blit(song_surf,   (sx, sy))
-            screen.blit(artist_surf, (ax, ay))
 
         pygame.display.flip()
 
