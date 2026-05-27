@@ -9,7 +9,7 @@ import threading
 from io import BytesIO
 from providers import get_current_playing_info, start_music, stop_music, skip_to_next, skip_to_previous
 from providers.manager import ProviderManager
-from web_config import start_flask_background, get_local_ip
+from web_config import start_flask_background, get_local_ip, get_hostname
 import argparse
 from pathlib import Path
 
@@ -36,15 +36,14 @@ def run(windowed=False):
 
     # Check active provider
     provider = mgr.get_active()
+    hostname = get_hostname()
     if provider:
         if provider.get_id() == "spotify" and not provider.is_authenticated():
-            ip = get_local_ip()
-            print(f"Spotify not authenticated. Visit https://{ip}:5001 to set up.", file=sys.stderr)
+            print(f"Spotify not authenticated. Visit https://{hostname}:5001 to set up.", file=sys.stderr)
         elif provider.get_id() == "airplay":
             print("AirPlay mode active. Select this device as an AirPlay speaker.", file=sys.stderr)
     else:
-        ip = get_local_ip()
-        print(f"No music provider configured. Visit https://{ip}:5001 to set up.", file=sys.stderr)
+        print(f"No music provider configured. Visit https://{hostname}:5001 to set up.", file=sys.stderr)
 
     # -------------------------------
     # Load & scale images (resources relative to script location)
@@ -55,6 +54,7 @@ def run(windowed=False):
     random_record_path = random.choice(record_files)
     record_image = pygame.image.load(str(random_record_path))
     record_image = pygame.transform.scale(record_image, (int(1080 * 1.25), int(1080 * 1.25)))
+    record_image = record_image.convert()  # convert to display format for faster blitting
 
     icons_dir = BASE_DIR / 'assets'
     play_btn  = pygame.image.load(str(icons_dir / 'play.png'))
@@ -96,6 +96,7 @@ def run(windowed=False):
     # -------------------------------
     # State variables
     # -------------------------------
+    clock = pygame.time.Clock()
     center = (540, 540)
     angle = 0
     angle_speed = -0.5
@@ -104,6 +105,12 @@ def run(windowed=False):
     last_mouse_pos = None
     details = None
     album_img = None
+
+    # Rotation cache — only re-rotate when the quantized angle changes
+    cached_record_angle = None
+    cached_record_surface = None
+    cached_logo_angle = None
+    cached_logo_surface = None
 
     # Helper to fetch and update track details and album image
     def update_details():
@@ -235,6 +242,8 @@ def run(windowed=False):
                         new_path = random.choice(record_files)
                         record_image = pygame.image.load(str(new_path))
                         record_image = pygame.transform.scale(record_image, (int(1080 * 1.25), int(1080 * 1.25)))
+                        record_image = record_image.convert()
+                        cached_record_angle = None  # force re-rotation
                         threading.Thread(target=update_details, daemon=True).start()
 
                 # Otherwise, start dragging if click on record
@@ -269,14 +278,19 @@ def run(windowed=False):
         # -------------------------------
         screen.fill((245, 230, 200))
 
-        # Spinning record
-        rotated = pygame.transform.rotate(record_image, angle)
-        screen.blit(rotated, rotated.get_rect(center=center))
+        # Spinning record — only re-rotate when angle changes by 1°
+        display_angle = round(angle) % 360
+        if display_angle != cached_record_angle:
+            cached_record_surface = pygame.transform.rotate(record_image, display_angle)
+            cached_record_angle = display_angle
+        screen.blit(cached_record_surface, cached_record_surface.get_rect(center=center))
 
         # Provider logo spinning at center of record
         if provider_logo:
-            rotated_logo = pygame.transform.rotate(provider_logo, angle)
-            screen.blit(rotated_logo, rotated_logo.get_rect(center=center))
+            if display_angle != cached_logo_angle:
+                cached_logo_surface = pygame.transform.rotate(provider_logo, display_angle)
+                cached_logo_angle = display_angle
+            screen.blit(cached_logo_surface, cached_logo_surface.get_rect(center=center))
 
         if is_playing:
             angle = (angle + angle_speed) % 360
@@ -359,6 +373,7 @@ def run(windowed=False):
         screen.blit(skip_btn,  (skip_x,  skip_y))
 
         pygame.display.flip()
+        clock.tick(30)  # cap at 30 FPS — plenty for a spinning record
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="piPlayer")

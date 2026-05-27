@@ -3,7 +3,7 @@
 Run this for initial Spotify configuration before starting the player.
 """
 import argparse
-from web_config import run_flask, get_local_ip
+from web_config import run_flask, get_hostname
 
 
 def main():
@@ -12,9 +12,9 @@ def main():
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
     args = parser.parse_args()
 
-    ip = get_local_ip()
+    hostname = get_hostname()
     print(f"piPlayer Setup Server")
-    print(f"Open https://{ip}:{args.port} in your browser to configure Spotify.")
+    print(f"Open https://{hostname}:{args.port} in your browser to configure.")
     print(f"(You'll see a certificate warning — click through it, the connection is still encrypted.)")
     print(f"Press Ctrl+C to stop.")
     run_flask(host=args.host, port=args.port)

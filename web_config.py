@@ -26,6 +26,17 @@ def get_local_ip():
         return "localhost"
 
 
+def get_hostname():
+    """Return the mDNS hostname (e.g. 'pi-player.local') for network-agnostic access."""
+    try:
+        hostname = socket.gethostname()
+        if not hostname.endswith(".local"):
+            hostname += ".local"
+        return hostname
+    except Exception:
+        return "localhost"
+
+
 # --- Provider selection ---
 
 @app.route("/")
@@ -90,7 +101,7 @@ def setup_spotify():
             client_secret = sm.client_secret
 
         if not redirect_uri:
-            redirect_uri = f"https://{get_local_ip()}:5001/callback"
+            redirect_uri = f"https://{get_hostname()}:5001/callback"
 
         if not all([client_id, client_secret, username]):
             flash("Client ID, Client Secret, and Username are all required.", "error")
@@ -100,8 +111,8 @@ def setup_spotify():
         flash("Credentials saved.", "success")
         return redirect(url_for("authorize"))
 
-    local_ip = get_local_ip()
-    default_redirect = f"https://{local_ip}:5001/callback"
+    hostname = get_hostname()
+    default_redirect = f"https://{hostname}:5001/callback"
 
     return render_template(
         "setup_spotify.html",
@@ -110,7 +121,7 @@ def setup_spotify():
         has_secret=bool(sm.client_secret),
         username=sm.username or "",
         redirect_uri=sm.redirect_uri or default_redirect,
-        local_ip=local_ip,
+        hostname=hostname,
         has_credentials=sm.has_credentials(),
         authenticated=sm.is_authenticated(),
         authorize_url=None,
@@ -125,7 +136,7 @@ def authorize():
         return redirect(url_for("setup_spotify"))
 
     authorize_url = sm.get_authorize_url()
-    local_ip = get_local_ip()
+    hostname = get_hostname()
 
     return render_template(
         "setup_spotify.html",
@@ -134,7 +145,7 @@ def authorize():
         has_secret=bool(sm.client_secret),
         username=sm.username or "",
         redirect_uri=sm.redirect_uri or "",
-        local_ip=local_ip,
+        hostname=hostname,
         has_credentials=sm.has_credentials(),
         authenticated=sm.is_authenticated(),
         authorize_url=authorize_url,
@@ -255,12 +266,13 @@ def _ensure_ssl_cert():
     if cert_file.exists() and key_file.exists():
         return str(cert_file), str(key_file)
     local_ip = get_local_ip()
+    hostname = get_hostname()
     subprocess.run([
         "openssl", "req", "-x509", "-newkey", "rsa:2048",
         "-keyout", str(key_file), "-out", str(cert_file),
         "-days", "365", "-nodes",
-        "-subj", f"/CN={local_ip}",
-        "-addext", f"subjectAltName=IP:{local_ip},DNS:piPlayer,DNS:localhost",
+        "-subj", f"/CN={hostname}",
+        "-addext", f"subjectAltName=IP:{local_ip},DNS:{hostname},DNS:piPlayer,DNS:localhost",
     ], check=True, capture_output=True)
     return str(cert_file), str(key_file)
 

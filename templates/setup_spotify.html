@@ -78,7 +78,7 @@
     <h2>Manual Callback</h2>
     <p>If the redirect hangs after authorizing, copy the full URL from your browser's address bar and paste it here:</p>
     <form method="POST" action="{{ url_for('manual_callback') }}">
-        <input type="text" name="callback_url" placeholder="https://192.168....:5001/callback?code=..." required>
+        <input type="text" name="callback_url" placeholder="https://{{ hostname }}:5001/callback?code=..." required>
         <button type="submit">Submit Code</button>
     </form>
     {% endif %}

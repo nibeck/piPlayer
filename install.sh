@@ -144,7 +144,7 @@ fi
 echo ""
 
 # Done
-LOCAL_IP=$(hostname -I | awk '{print $1}')
+HOSTNAME=$(hostname).local
 echo "================================"
 echo "  Installation Complete!"
 echo "================================"
@@ -152,7 +152,7 @@ echo ""
 echo "Next steps:"
 echo "  1. Configure your music service:"
 echo "     $VENV_DIR/bin/python $SCRIPT_DIR/setup.py"
-echo "     Then open https://${LOCAL_IP}:5001 in your browser."
+echo "     Then open https://${HOSTNAME}:5001 in your browser."
 echo ""
 echo "  2. Choose Spotify or Apple Music (AirPlay) from the setup page."
 echo ""

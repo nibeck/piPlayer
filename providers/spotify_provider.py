@@ -39,7 +39,7 @@ class SpotifyManager:
         self.client_id = os.getenv("SPOTIFY_CLIENT_ID")
         self.client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
         self.username = os.getenv("SPOTIFY_USERNAME")
-        self.redirect_uri = os.getenv("SPOTIFY_REDIRECT_URI", "https://localhost:5001/callback")
+        self.redirect_uri = os.getenv("SPOTIFY_REDIRECT_URI")
 
     def has_credentials(self):
         return all([self.client_id, self.client_secret, self.username])
